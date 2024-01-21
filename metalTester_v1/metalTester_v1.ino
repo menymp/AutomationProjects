@@ -18,7 +18,8 @@ typedef enum {
   SET_PROVE,
   TEST,
   UNLOCK,
-  DEFECT
+  DEFECT,
+  SUPERVISOR
 }SYSTEM_STATE;
 
 /* INPUTS DEFINITIONS */
@@ -221,6 +222,23 @@ void loop() {
       
     case DEFECT:
       if (supervisor_lock == SUPERVISOR_ACTIVE && (button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED)) {
+        state = SUPERVISOR;
+      }
+
+      latch_cnt = 0;
+      lock_move_cnt = 0;
+      prove_move_cnt = 0;
+      test_wait_cnt = 0;
+
+      digitalWrite(LOCK_PIN, SET_LOCK_OUT);
+      digitalWrite(PROVE_PIN, RESET_PROVE);
+      digitalWrite(RED_LAMP_PIN, LAMP_ON);
+      digitalWrite(GREEN_LAMP_PIN, LAMP_OFF);
+      Serial.println(DEFECT_MSG);
+      break;
+      
+    case SUPERVISOR:
+      if (supervisor_lock != SUPERVISOR_ACTIVE && (button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED)) {
         state = UNLOCK;
       }
 
