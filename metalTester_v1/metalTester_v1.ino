@@ -9,6 +9,8 @@
  *  YYYY/MM/DD  NAME    CHANGE
  *  2024/01/05  menymp  change logic to add two sensors and prove extension
  *                      I/O layout change to use ESP32 carrier board
+ *  2024/01/21  menymp  add intermediate supervisor state to avoid race
+ *                      conditions.
  */
 /* FSM STATES */
 typedef enum {
@@ -181,13 +183,13 @@ void loop() {
       break;
       
     case TEST:
-      if (supervisor_lock == SUPERVISOR_ACTIVE && (button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED)) {
-        state = UNLOCK;
+      if (supervisor_lock == SUPERVISOR_ACTIVE) {
+        state = SUPERVISOR;
       }
-      if ((sensor_1 != METAL_SENSOR_ACTIVE || sensor_2 != METAL_SENSOR_ACTIVE) && prove_move_cnt  >= PROVE_TIME) {
+      if ((sensor_1 != METAL_SENSOR_ACTIVE || sensor_2 != METAL_SENSOR_ACTIVE) && test_wait_cnt  >= TEST_TIME) {
         state = DEFECT;
       }
-      if (sensor_1 == METAL_SENSOR_ACTIVE && sensor_2 == METAL_SENSOR_ACTIVE && prove_move_cnt  >= PROVE_TIME) {
+      if (sensor_1 == METAL_SENSOR_ACTIVE && sensor_2 == METAL_SENSOR_ACTIVE && test_wait_cnt  >= TEST_TIME) {
         state = UNLOCK;
       }
       
@@ -204,7 +206,7 @@ void loop() {
       break;
       
     case UNLOCK:
-      if (button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED) {
+      if (button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && lock_move_cnt == LOCK_TIME) {
         state = READY;
       }
 
@@ -221,7 +223,7 @@ void loop() {
       break;
       
     case DEFECT:
-      if (supervisor_lock == SUPERVISOR_ACTIVE && (button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED)) {
+      if (supervisor_lock == SUPERVISOR_ACTIVE) {
         state = SUPERVISOR;
       }
 
