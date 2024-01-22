@@ -11,6 +11,8 @@
  *                      I/O layout change to use ESP32 carrier board
  *  2024/01/21  menymp  add intermediate supervisor state to avoid race
  *                      conditions.
+ *  2024/01/21  menymp  fix ready mode race condition, adjust times, adjusts
+ *                      default sensor detection states, fix supervisor msg
  */
 /* FSM STATES */
 typedef enum {
@@ -21,11 +23,12 @@ typedef enum {
   TEST,
   UNLOCK,
   DEFECT,
-  SUPERVISOR
+  SUPERVISOR,
+  WAIT_EXIT
 }SYSTEM_STATE;
 
 /* INPUTS DEFINITIONS */
-#define METAL_SENSOR_ACTIVE     true
+#define METAL_SENSOR_ACTIVE     false
 #define BUTTON_PUSHED           true
 #define SUPERVISOR_ACTIVE       true
 /* OUTPUTS DEFINITIONS */
@@ -39,10 +42,10 @@ typedef enum {
 #define CLOCK_DELAY             100
 /* STATES DELAY COUNTS */
 /* estimated with pneumatic moves since there are no sensors */
-#define LATCH_TIME              10
-#define LOCK_TIME               10
-#define PROVE_TIME              10
-#define TEST_TIME               10
+#define LATCH_TIME              4
+#define LOCK_TIME               4
+#define PROVE_TIME              4
+#define TEST_TIME               4
 
 /*log messages definitions*/
 #define READY_MSG      "READY_STATE"
@@ -53,20 +56,22 @@ typedef enum {
 #define TEST_MSG       "TEST_STATE"
 #define DEFECT_MSG     "DEFECT_STATE"
 #define UNLOCK_MSG     "UNLOCK_STATE"
+#define SUPERVISOR_MSG "SUPERVISOR_STATE"
+#define WAIT_EXIT_MSG  "WAIT_EXIT_STATE"
 #define HARD_FAULT_MSG "HARD_FAULT"
 
 /* INPUT PINS */
-#define SENSOR_1_PIN        15
-#define SENSOR_2_PIN        2
-#define BUTTON_A_PIN        4
-#define BUTTON_B_PIN        5
-#define SUPERVISOR_LOCK_PIN 18
+#define SENSOR_1_PIN        18
+#define SENSOR_2_PIN        19
+#define BUTTON_A_PIN        15
+#define BUTTON_B_PIN        2
+#define SUPERVISOR_LOCK_PIN 4
 
 /* OUTPUT PINS */
 #define LOCK_PIN        13
 #define PROVE_PIN       12
-#define RED_LAMP_PIN    14
-#define GREEN_LAMP_PIN  27
+#define RED_LAMP_PIN    27
+#define GREEN_LAMP_PIN  14
 
 /* Reset signal counters */
 SYSTEM_STATE state = READY;
@@ -105,8 +110,34 @@ void loop() {
   int sensor_1 = digitalRead(SENSOR_1_PIN);
   int sensor_2 = digitalRead(SENSOR_2_PIN);
   int supervisor_lock = digitalRead(SUPERVISOR_LOCK_PIN);
+  Serial.print(button_a);
+  Serial.print(",");
+  Serial.print(button_b);
+  Serial.print(",");
+  Serial.print(sensor_1);
+  Serial.print(",");
+  Serial.print(sensor_2);
+  Serial.print(",");
+  Serial.println(supervisor_lock);
+  
   
   switch(state){
+     case WAIT_EXIT:
+      if (button_a != BUTTON_PUSHED && button_b != BUTTON_PUSHED) {
+        state = READY;
+      }
+      latch_cnt = 0;
+      lock_move_cnt = 0;
+      prove_move_cnt = 0;
+      test_wait_cnt = 0;
+      
+      digitalWrite(LOCK_PIN, RESET_LOCK);
+      digitalWrite(PROVE_PIN, RESET_PROVE);
+      digitalWrite(RED_LAMP_PIN, LAMP_OFF);
+      digitalWrite(GREEN_LAMP_PIN, LAMP_ON);
+      Serial.println(WAIT_EXIT_MSG);
+      break;
+    
     case READY:
       if (supervisor_lock != SUPERVISOR_ACTIVE && (button_a == BUTTON_PUSHED || button_b == BUTTON_PUSHED)) {
         state = LATCH;
@@ -207,7 +238,7 @@ void loop() {
       
     case UNLOCK:
       if (button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && lock_move_cnt == LOCK_TIME) {
-        state = READY;
+        state = WAIT_EXIT;
       }
 
       latch_cnt = 0;
@@ -253,7 +284,7 @@ void loop() {
       digitalWrite(PROVE_PIN, RESET_PROVE);
       digitalWrite(RED_LAMP_PIN, LAMP_ON);
       digitalWrite(GREEN_LAMP_PIN, LAMP_OFF);
-      Serial.println(DEFECT_MSG);
+      Serial.println(SUPERVISOR_MSG);
       break;
       
     default:
