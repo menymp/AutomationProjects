@@ -2,6 +2,7 @@
  *  plastoc dispose fixture controller v1
  *  
  *  Controller for fixture plastic mold dispose
+ *  in depuration stage FSM
  *  
  *  menymp
  *  Apr 2024
