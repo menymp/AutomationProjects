@@ -8,10 +8,12 @@
  *  Apr 2024
  *  
  *  YYYY/MM/DD  NAME    CHANGE
+ *  2024/05/04  menymp  add validation routine and input map
  */
 /* FSM STATES */
 typedef enum {
   READY,
+  VALIDATION,
   LATCH,
   SET_LOCK,
   TEST,
@@ -45,6 +47,7 @@ typedef enum {
 /*log messages definitions*/
 #define READY_MSG      "READY_STATE"
 #define LATCH_MSG      "LATCH_STATE"
+#define VALIDATION_MSG "VALIDATION_STATE"
 #define SET_LOCK_MSG   "SET_LOCK_STATE"
 #define TEST_MSG       "TEST_STATE"
 #define DEFECT_MSG     "DEFECT_STATE"
@@ -59,6 +62,7 @@ typedef enum {
 #define SENSOR_2_PIN        19
 #define BUTTON_A_PIN        15
 #define BUTTON_B_PIN        2
+#define VALIDATION_PIN      4
 
 /* OUTPUT PINS */
 #define LOCK_PIN        13
@@ -72,6 +76,7 @@ int latch_cnt = 0;
 int lock_move_cnt = 0;
 int razor_move_cnt = 0;
 int test_wait_cnt = 0;
+bool flag_validation_mode = false;
 
 
 /*init io and log by serial*/
@@ -81,6 +86,7 @@ void setup() {
   pinMode(SENSOR_2_PIN, INPUT_PULLUP);
   pinMode(BUTTON_A_PIN, INPUT_PULLUP);
   pinMode(BUTTON_B_PIN, INPUT_PULLUP);
+  pinMode(VALIDATION_PIN, INPUT_PULLUP);
   /* OUTPUT SETUP */
   pinMode(LOCK_PIN, OUTPUT);
   pinMode(RAZOR_PIN, OUTPUT);
@@ -101,13 +107,17 @@ void loop() {
   int button_b = digitalRead(BUTTON_B_PIN);
   int sensor_1 = digitalRead(SENSOR_1_PIN);
   int sensor_2 = digitalRead(SENSOR_2_PIN);
+  int validation = digitalRead(VALIDATION_PIN);
   Serial.print(button_a);
   Serial.print(",");
   Serial.print(button_b);
   Serial.print(",");
   Serial.print(sensor_1);
   Serial.print(",");
-  Serial.println(sensor_2);
+  Serial.print(sensor_2);
+  Serial.print(",");
+  Serial.println(validation);
+
   
   
   switch(state){
@@ -131,6 +141,27 @@ void loop() {
       if (sensor_2 == DOOR_CLOSED && (button_a == BUTTON_PUSHED || button_b == BUTTON_PUSHED)) {
         state = LATCH;
       }
+      if (validation == BUTTON_PUSHED) {
+        state = VALIDATION;
+      }
+      flag_validation_mode = false;
+      latch_cnt = 0;
+      lock_move_cnt = 0;
+      razor_move_cnt = 0;
+      test_wait_cnt = 0;
+      
+      digitalWrite(LOCK_PIN, RESET_LOCK);
+      digitalWrite(RAZOR_PIN, RESET_RAZOR);
+      digitalWrite(RED_LAMP_PIN, LAMP_ON);
+      digitalWrite(GREEN_LAMP_PIN, LAMP_ON);
+      Serial.println(READY_MSG);
+      break;
+
+     case VALIDATION:
+      if (sensor_2 == DOOR_CLOSED && (button_a == BUTTON_PUSHED || button_b == BUTTON_PUSHED)) {
+        state = LATCH;
+      }
+      flag_validation_mode = true;
       latch_cnt = 0;
       lock_move_cnt = 0;
       razor_move_cnt = 0;
@@ -204,8 +235,11 @@ void loop() {
 
     case DEFECT:
      // WAIT FOR USER HANDS TO BE SAFE
-      if (button_a != BUTTON_PUSHED || button_b != BUTTON_PUSHED) {
+      if ((button_a != BUTTON_PUSHED || button_b != BUTTON_PUSHED) && !flag_validation_mode) {
         state = RAZOR_CUT;
+      }
+      if (flag_validation_mode) {
+        state = UNLOCK;
       }
       latch_cnt = 0;
       lock_move_cnt = 0;
