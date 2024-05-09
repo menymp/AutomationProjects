@@ -29,8 +29,8 @@ typedef enum {
 #define BUTTON_PUSHED           true
 #define DOOR_CLOSED             true
 /* OUTPUTS DEFINITIONS */
-#define LAMP_ON                 true
-#define LAMP_OFF                false
+#define LAMP_ON                 HIGH
+#define LAMP_OFF                LOW
 #define SET_LOCK_OUT            true
 #define RESET_LOCK              false
 #define SET_RAZOR               true
@@ -40,9 +40,10 @@ typedef enum {
 /* STATES DELAY COUNTS */
 /* estimated with pneumatic moves since there are no sensors */
 #define LATCH_TIME              4
-#define LOCK_TIME               4
+#define LOCK_TIME               10
 #define RAZOR_CUT_TIME          10
-#define TEST_TIME               4
+#define TEST_TIME               10
+#define DEFECT_TIME             10
 
 /*log messages definitions*/
 #define READY_MSG      "READY_STATE"
@@ -59,16 +60,16 @@ typedef enum {
 
 /* INPUT PINS */
 #define SENSOR_1_PIN        18
-#define SENSOR_2_PIN        19
-#define BUTTON_A_PIN        15
-#define BUTTON_B_PIN        2
-#define VALIDATION_PIN      4
+#define SENSOR_2_PIN        17
+#define BUTTON_A_PIN        19 //ok
+#define BUTTON_B_PIN        23 //ok
+#define VALIDATION_PIN      22 //ok
 
 /* OUTPUT PINS */
-#define LOCK_PIN        13
-#define RAZOR_PIN       12
-#define RED_LAMP_PIN    27
-#define GREEN_LAMP_PIN  14
+#define LOCK_PIN        12
+#define RAZOR_PIN       4
+#define RED_LAMP_PIN    1
+#define GREEN_LAMP_PIN  2
 
 /* Reset signal counters */
 SYSTEM_STATE state = READY;
@@ -76,6 +77,7 @@ int latch_cnt = 0;
 int lock_move_cnt = 0;
 int razor_move_cnt = 0;
 int test_wait_cnt = 0;
+int defect_time = 0;
 bool flag_validation_mode = false;
 
 
@@ -129,6 +131,7 @@ void loop() {
       lock_move_cnt = 0;
       razor_move_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
       
       digitalWrite(LOCK_PIN, RESET_LOCK);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
@@ -149,11 +152,12 @@ void loop() {
       lock_move_cnt = 0;
       razor_move_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
       
       digitalWrite(LOCK_PIN, RESET_LOCK);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
-      digitalWrite(RED_LAMP_PIN, LAMP_ON);
-      digitalWrite(GREEN_LAMP_PIN, LAMP_ON);
+      digitalWrite(RED_LAMP_PIN, LAMP_OFF);
+      digitalWrite(GREEN_LAMP_PIN, LAMP_OFF);
       Serial.println(READY_MSG);
       break;
 
@@ -166,12 +170,13 @@ void loop() {
       lock_move_cnt = 0;
       razor_move_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
       
       digitalWrite(LOCK_PIN, RESET_LOCK);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
-      digitalWrite(RED_LAMP_PIN, LAMP_OFF);
+      digitalWrite(RED_LAMP_PIN, LAMP_ON);
       digitalWrite(GREEN_LAMP_PIN, LAMP_ON);
-      Serial.println(READY_MSG);
+      Serial.println(VALIDATION_MSG);
       break;
       
     case LATCH:
@@ -185,11 +190,12 @@ void loop() {
       lock_move_cnt = 0;
       razor_move_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
       
       digitalWrite(LOCK_PIN, RESET_LOCK);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
       digitalWrite(RED_LAMP_PIN, LAMP_OFF);
-      digitalWrite(GREEN_LAMP_PIN, LAMP_ON);
+      digitalWrite(GREEN_LAMP_PIN, LAMP_OFF);
       Serial.println(LATCH_MSG);
       break;
       
@@ -205,6 +211,7 @@ void loop() {
       if (lock_move_cnt < LOCK_TIME) lock_move_cnt ++;
       razor_move_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
       
       digitalWrite(LOCK_PIN, SET_LOCK_OUT);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
@@ -224,6 +231,7 @@ void loop() {
       latch_cnt = 0;
       lock_move_cnt = 0;
       razor_move_cnt = 0;
+      defect_time = 0;
       if (test_wait_cnt < TEST_TIME) test_wait_cnt ++;
       
       digitalWrite(LOCK_PIN, SET_LOCK_OUT);
@@ -235,16 +243,20 @@ void loop() {
 
     case DEFECT:
      // WAIT FOR USER HANDS TO BE SAFE
-      if ((button_a != BUTTON_PUSHED || button_b != BUTTON_PUSHED) && !flag_validation_mode) {
+      if ((button_a != BUTTON_PUSHED || button_b != BUTTON_PUSHED)) {
+        state = TEST;
+      }
+      if (button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && !flag_validation_mode) {
         state = RAZOR_CUT;
       }
-      if (flag_validation_mode) {
+      if (flag_validation_mode && defect_time == DEFECT_TIME) {
         state = UNLOCK;
       }
       latch_cnt = 0;
       lock_move_cnt = 0;
       razor_move_cnt = 0;
       test_wait_cnt = 0;
+      if (defect_time < DEFECT_TIME) defect_time ++;
 
       digitalWrite(LOCK_PIN, SET_LOCK_OUT);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
@@ -257,15 +269,17 @@ void loop() {
       if (sensor_2 != DOOR_CLOSED || button_a != BUTTON_PUSHED || button_b != BUTTON_PUSHED) {
         state = DEFECT;
       }
-      if (sensor_2 == DOOR_CLOSED && button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && razor_move_cnt < RAZOR_CUT_TIME) {
+      if (sensor_2 == DOOR_CLOSED && button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && razor_move_cnt == RAZOR_CUT_TIME) {
+        razor_move_cnt = 0;
         state = RAZOR_UP;
       }
       if (razor_move_cnt < RAZOR_CUT_TIME) razor_move_cnt ++;
       lock_move_cnt = 0;
       latch_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
       
-      digitalWrite(LOCK_PIN, RESET_LOCK);
+      digitalWrite(LOCK_PIN, SET_LOCK_OUT);
       digitalWrite(RAZOR_PIN, SET_RAZOR);
       digitalWrite(RED_LAMP_PIN, LAMP_ON);
       digitalWrite(GREEN_LAMP_PIN, LAMP_OFF);
@@ -276,15 +290,17 @@ void loop() {
       if (sensor_2 != DOOR_CLOSED || button_a != BUTTON_PUSHED || button_b != BUTTON_PUSHED) {
         state = RAZOR_UP;
       }
-      if (sensor_2 == DOOR_CLOSED && button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && razor_move_cnt < RAZOR_CUT_TIME) {
+      if (sensor_2 == DOOR_CLOSED && button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && razor_move_cnt == RAZOR_CUT_TIME) {
+        razor_move_cnt = 0;
         state = UNLOCK;
       }
       if (razor_move_cnt < RAZOR_CUT_TIME) razor_move_cnt ++;
       lock_move_cnt = 0;
       latch_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
       
-      digitalWrite(LOCK_PIN, RESET_LOCK);
+      digitalWrite(LOCK_PIN, SET_LOCK_OUT);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
       digitalWrite(RED_LAMP_PIN, LAMP_ON);
       digitalWrite(GREEN_LAMP_PIN, LAMP_OFF);
@@ -300,6 +316,7 @@ void loop() {
       if (lock_move_cnt < LOCK_TIME) lock_move_cnt ++;
       razor_move_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
 
       digitalWrite(LOCK_PIN, RESET_LOCK);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
@@ -313,6 +330,7 @@ void loop() {
       lock_move_cnt = 0;
       razor_move_cnt = 0;
       test_wait_cnt = 0;
+      defect_time = 0;
       
       digitalWrite(LOCK_PIN, RESET_LOCK);
       digitalWrite(RAZOR_PIN, RESET_RAZOR);
