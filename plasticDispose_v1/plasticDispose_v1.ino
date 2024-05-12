@@ -68,7 +68,7 @@ typedef enum {
 /* OUTPUT PINS */
 #define LOCK_PIN        12
 #define RAZOR_PIN       4
-#define RED_LAMP_PIN    1
+#define RED_LAMP_PIN    5
 #define GREEN_LAMP_PIN  2
 
 /* Reset signal counters */
