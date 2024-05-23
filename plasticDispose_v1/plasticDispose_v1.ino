@@ -9,6 +9,7 @@
  *  
  *  YYYY/MM/DD  NAME    CHANGE
  *  2024/05/04  menymp  add validation routine and input map
+ *  2024/05/22  menymp  change output lock for door
  */
 /* FSM STATES */
 typedef enum {
@@ -124,7 +125,7 @@ void loop() {
   
   switch(state){
      case WAIT_EXIT:
-      if (button_a != BUTTON_PUSHED && button_b != BUTTON_PUSHED) {
+      if (button_a != BUTTON_PUSHED && button_b != BUTTON_PUSHED && sensor_2 != DOOR_CLOSED) {
         state = READY;
       }
       latch_cnt = 0;
@@ -290,11 +291,11 @@ void loop() {
       if (sensor_2 != DOOR_CLOSED || button_a != BUTTON_PUSHED || button_b != BUTTON_PUSHED) {
         state = RAZOR_UP;
       }
-      if (sensor_2 == DOOR_CLOSED && button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && razor_move_cnt == RAZOR_CUT_TIME) {
+      if (sensor_2 == DOOR_CLOSED && button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && razor_move_cnt == 4) {
         razor_move_cnt = 0;
         state = UNLOCK;
       }
-      if (razor_move_cnt < RAZOR_CUT_TIME) razor_move_cnt ++;
+      if (razor_move_cnt < 4) razor_move_cnt ++; //changed for time
       lock_move_cnt = 0;
       latch_cnt = 0;
       test_wait_cnt = 0;
@@ -308,12 +309,12 @@ void loop() {
       break;
       
     case UNLOCK:
-      if (sensor_2 == DOOR_CLOSED && button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && lock_move_cnt == LOCK_TIME) {
+      if (sensor_2 == DOOR_CLOSED && button_a == BUTTON_PUSHED && button_b == BUTTON_PUSHED && lock_move_cnt == 3) {
         state = WAIT_EXIT;
       }
 
       latch_cnt = 0;
-      if (lock_move_cnt < LOCK_TIME) lock_move_cnt ++;
+      if (lock_move_cnt < 3) lock_move_cnt ++; // is this time really needed
       razor_move_cnt = 0;
       test_wait_cnt = 0;
       defect_time = 0;
